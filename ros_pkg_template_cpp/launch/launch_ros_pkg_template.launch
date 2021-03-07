@@ -1,0 +1,11 @@
+<launch>
+  <arg name="param_file" value="$(dirname)/../config/params.yaml" />
+
+<group ns="ns">
+  <node pkg="ros_pkg_template_cpp" type="ros_pkg_template_cpp" name="ros_package_template" output="screen">
+    <rosparam command="load" file="$(arg param_file)" />
+    <remap from="input_float_topic" to="/ns/ros_pkg_template_node/input"/>
+    <remap from="output_float_topic" to="/ns/ros_pkg_template_node/output"/>
+  </node>
+</group>
+</launch>

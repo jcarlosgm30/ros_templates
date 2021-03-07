@@ -7,94 +7,61 @@
 #ifndef ROS_PKG_TEMPLATE_NODE_HPP_
 #define ROS_PKG_TEMPLATE_NODE_HPP_
 
-#include "rclcpp/rclcpp.hpp"
-#include <rclcpp_lifecycle/lifecycle_node.hpp>
-#include "ros_pkg_template/visibility.h"
+#include <ros/ros.h>
+#include <dynamic_reconfigure/server.h>
+#include <ros_pkg_template_cpp/DynConfConfig.h>
+#include "std_msgs/Float64.h"
+#include "std_srvs/SetBool.h"
 #include "ros_pkg_template/algorithm.hpp"
-#include "std_msgs/msg/float64.hpp"
-#include "std_srvs/srv/set_bool.hpp"
-
-using LNI = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface;
 
 /*!
  * Main class for the node to handle the ROS2 interfacing.
  */
-class RosPkgTemplate : public rclcpp_lifecycle::LifecycleNode
+class RosPkgTemplate
 {
 public:
   /*!
-   * Constructor.
-   * @param nodeOptions the ROS2 node options.
-   */
-    ROS_PKG_TEMPLATE_PUBLIC RosPkgTemplate(const rclcpp::NodeOptions& options);
-  
-  /*!
-   * On configure lifecycle state.
-   * @param State Previous state.
-   */
-    LNI::CallbackReturn on_configure(const rclcpp_lifecycle::State & state) override;
+    * Constructor.
+    * @param nodeOptions the ROS2 node options.
+    */
+    RosPkgTemplate(ros::NodeHandle& nodeHandle);
 
   /*!
-   * On activate lifecycle state.
-   * @param State Previous lifecycle state.
-   */
-    LNI::CallbackReturn on_activate(const rclcpp_lifecycle::State & state) override;
-
-  /*!
-   * On deactivate lifecycle state.
-   * @param State Previous lifecycle state.
-   */
-    LNI::CallbackReturn on_deactivate(const rclcpp_lifecycle::State & state) override;
+    * Destructor.
+    */
+  virtual ~RosPkgTemplate();
   
-  /*!
-   * On cleanup lifecycle state.
-   * @param State Previous lifecycle state.
-   */
-    LNI::CallbackReturn on_cleanup(const rclcpp_lifecycle::State & state) override;
-  
-  /*!
-   * On shutdown lifecycle state.
-   * @param State Previous lifecycle state.
-   */
-    LNI::CallbackReturn on_shutdown(const rclcpp_lifecycle::State & state) override;
-  
-  /*!
-   * On error lifecycle state.
-   * @param State Previous lifecycle state.
-   */
-    LNI::CallbackReturn on_error(const rclcpp_lifecycle::State & state) override;
-
 private:
-    //! Parameters
-    rclcpp::Parameter param;
- 
-    //! Algorithm computation object
-    Algorithm algorithm_;
- 
-    //! Interfaces definition
-    rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::Float64>::SharedPtr publisher_;
-    rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr subscriber_;
-    rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr client_;
-    
-  /*!
-   * Dynamic reconfiguration callback.
-   * @param parameters Vector of node parameters.
-   * @return Accept or not the change of parameters.
-   */
-    rcl_interfaces::msg::SetParametersResult dyn_reconf_callback(const std::vector<rclcpp::Parameter> & parameters);
+  //! ROS node handle
+  ros::NodeHandle& nodeHandle_;
 
-  /*!
-   * Subscriptor to float data.
-   * @param msg the received message.
-   */
-    void callback(const std_msgs::msg::Float64::ConstSharedPtr msg);
+  //! Parameter
+  bool param;
+  ros_pkg_template_cpp::DynConfConfig currentConfig;
 
+  //! Algorithm computation object
+  Algorithm algorithm_;
+
+  //! Interfaces definition
+  ros::Subscriber subscriber_;
+  ros::Publisher publisher_;
+  
+  //! Dynamic reconfigure interfaces definition
+  boost::recursive_mutex dynReconfServerMutex;  // To avoid Dynamic Reconfigure Server warning
+  boost::shared_ptr<dynamic_reconfigure::Server<ros_pkg_template_cpp::DynConfConfig>> dynReconfServer_;
+
+ /*!
+  * Callback from dynamic reconfigure server.
+  * @param config New configuration.
+  * @param level Level, which is result of ORing together all of level values
+  */
+  void dyn_reconf_callback(ros_pkg_template_cpp::DynConfConfig &config, uint32_t level);
+  
   /*!
-   * Request service method.
-   * @param resp the response to the request message.
-   * @return The response to the request message.
-   */
-    std_srvs::srv::SetBool::Response::ConstSharedPtr request_service(std_srvs::srv::SetBool::Response::ConstSharedPtr resp);
+  * Subscriptor to float data.
+  * @param msg the received message.
+  */
+  void callback(const std_msgs::Float64ConstPtr &msg);
 };
 
 #endif  // ROS_PKG_TEMPLATE_NODE_HPP_

@@ -6,188 +6,72 @@
 #include <chrono>
 #include "ros_pkg_template/ros_pkg_template.hpp"
 
-
-using LNI = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface;
-using namespace std::placeholders;
-using namespace std::chrono_literals;
-
-RosPkgTemplate::RosPkgTemplate(const rclcpp::NodeOptions& options)
-: rclcpp_lifecycle::LifecycleNode("ros_pkg_template", options)
+RosPkgTemplate::RosPkgTemplate(ros::NodeHandle& nodeHandle)
+: nodeHandle_(nodeHandle)
 {
-    RCLCPP_INFO(this->get_logger(), "Obtaining node '%s' parameters ", this->get_name());
-    //! Declare parameters
-    this->declare_parameter<bool>("param", true);
-    //! Get parameters
-    this->param = this->get_parameter("param");
+    // Dynamic reconfigure parameters
+    dynReconfServer_ =  boost::make_shared<dynamic_reconfigure::Server<ros_pkg_template_cpp::DynConfConfig>>(dynReconfServerMutex);
+    dynamic_reconfigure::Server<ros_pkg_template_cpp::DynConfConfig>::CallbackType fDynReconfCb;
+    fDynReconfCb = boost::bind(&RosPkgTemplate::dyn_reconf_callback, this, _1, _2);
+    dynReconfServer_->setCallback(fDynReconfCb);
+
+    // Update parameters
+    ros_pkg_template_cpp::DynConfConfig currentConfig;
+    dynReconfServer_->getConfigDefault(currentConfig);
+    dynReconfServerMutex.lock();
+    dynReconfServer_->updateConfig(currentConfig);
+    dynReconfServerMutex.unlock();
+
+    // Interfaces 
+    subscriber_ = nodeHandle_.subscribe("input_float_topic",
+                                        10,
+                                        &RosPkgTemplate::callback, this);
+    publisher_ = nodeHandle_.advertise<std_msgs::Float64>("output_float_topic",
+                                                          10);
+    ROS_INFO("Successfully launched node.");
 }
 
-LNI::CallbackReturn RosPkgTemplate::on_configure(const rclcpp_lifecycle::State &state) {
-    (void)state;
-    RCUTILS_LOG_INFO_NAMED(get_name(), "on_configure() is called.");
-    try {
-        // Define parameters callback
-        this->set_on_parameters_set_callback(std::bind(&RosPkgTemplate::dyn_reconf_callback, this, _1));
-
-        // Subscribers
-        subscriber_ = this->create_subscription<std_msgs::msg::Float64>("input_float_topic",
-                                                                   10,
-                                                                   std::bind(&RosPkgTemplate::callback, this, _1));
-        // Publishers
-        publisher_ = create_publisher<std_msgs::msg::Float64>("output_float_topic", 10);
-
-        // Client
-        client_ = create_client<std_srvs::srv::SetBool>("get_obstacle_service");
-
-    }
-    catch(std::exception & e)
-    {
-        RCLCPP_ERROR(this->get_logger(), e.what());
-        return LNI::CallbackReturn::FAILURE;
-    }
-
-    RCLCPP_INFO(this->get_logger(), "Node '%s' configured", this->get_name());
-
-    return LNI::CallbackReturn::SUCCESS;
-}
-
-LNI::CallbackReturn RosPkgTemplate::on_activate(const rclcpp_lifecycle::State &state) {
-    (void)state;
-    RCUTILS_LOG_INFO_NAMED(get_name(), "on_activate() is called.");
-    try {
-        publisher_->on_activate();
-    }
-    catch(std::exception & e)
-    {
-        RCLCPP_ERROR(this->get_logger(), e.what());
-        return LNI::CallbackReturn::FAILURE;
-    }
-    return LNI::CallbackReturn::SUCCESS;
-}
-
-LNI::CallbackReturn RosPkgTemplate::on_deactivate(const rclcpp_lifecycle::State &state) {
-    (void)state;
-    RCUTILS_LOG_INFO_NAMED(get_name(), "on_deactivate() is called.");
-    try {
-        publisher_->on_deactivate();
-    }
-    catch(std::exception & e)
-    {
-        RCLCPP_ERROR(this->get_logger(), e.what());
-        return LNI::CallbackReturn::FAILURE;
-    }
-    return LNI::CallbackReturn::SUCCESS;
-}
-
-LNI::CallbackReturn RosPkgTemplate::on_cleanup(const rclcpp_lifecycle::State &state) {
-    (void)state;
-    RCUTILS_LOG_INFO_NAMED(get_name(), "on_cleanup() is called.");
-    try {
-        this->param = this->get_parameter("param");
-        publisher_.reset();
-    }
-    catch(std::exception & e)
-    {
-        RCLCPP_ERROR(this->get_logger(), e.what());
-        return LNI::CallbackReturn::FAILURE;
-    }
-    return LNI::CallbackReturn::SUCCESS;
-}
-
-LNI::CallbackReturn RosPkgTemplate::on_error(const rclcpp_lifecycle::State &state) {
-    (void)state;
-    RCUTILS_LOG_INFO_NAMED(get_name(), "on_error is called from state %s.", state.label().c_str());
-
-    try {
-        this->param = this->get_parameter("param");
-        publisher_.reset();
-    }
-    catch(std::exception & e)
-    {
-        RCLCPP_ERROR(this->get_logger(), e.what());
-        return LNI::CallbackReturn::FAILURE;
-    }
-    return LNI::CallbackReturn::SUCCESS;
-}
-
-LNI::CallbackReturn RosPkgTemplate::on_shutdown(const rclcpp_lifecycle::State &state) {
-    (void)state;
-    RCUTILS_LOG_INFO_NAMED(get_name(), "on shutdown is called from state %s.", state.label().c_str());
-    try {
-        publisher_.reset();
-    }
-    catch(std::exception & e)
-    {
-        RCLCPP_ERROR(this->get_logger(), e.what());
-        return LNI::CallbackReturn::FAILURE;
-    }
-    return LNI::CallbackReturn::SUCCESS;
-}
-
-void RosPkgTemplate::callback(const std_msgs::msg::Float64::ConstSharedPtr msg)
+RosPkgTemplate::~RosPkgTemplate()
 {
-    RCLCPP_INFO(this->get_logger(), "Receiving preprocessed float data");
-    if (publisher_->is_activated())
+}
+
+void RosPkgTemplate::dyn_reconf_callback(ros_pkg_template_cpp::DynConfConfig &config, uint32_t level) {
+  ROS_INFO("Reconfigure Request: %d %f %s %s %d", 
+            config.int_param, config.double_param, 
+            config.str_param.c_str(), 
+            config.bool_param?"True":"False", 
+            config.size);
+    bool config_accepted = true;
+    if (config_accepted)
     {
-        try {
-            algorithm_.addData(msg->data);
-            if (algorithm_.getDataSize() > 100)
-            {
-                algorithm_.accReset();
-                RCLCPP_INFO(this->get_logger(), "Accumulator reseting");
-            }
-            else
-            {
-                auto resultMsg = std_msgs::msg::Float64 ();
-                resultMsg.data = algorithm_.getAverage();
-                publisher_->publish(resultMsg);
-                RCLCPP_INFO(this->get_logger(), "Publishing average");
-            }
-        }
-        catch(std::exception & e)
+        dynReconfServer_->getConfigDefault(currentConfig);
+        dynReconfServerMutex.lock();
+        dynReconfServer_->updateConfig(currentConfig);
+        dynReconfServerMutex.unlock();
+    }
+}
+
+void RosPkgTemplate::callback(const std_msgs::Float64ConstPtr &msg)
+{
+    ROS_INFO("Receiving preprocessed float data");
+    try {
+        algorithm_.addData(msg->data);
+        if (algorithm_.getDataSize() > 100)
         {
-            RCLCPP_ERROR(this->get_logger(), e.what());
+            algorithm_.accReset();
+            ROS_INFO("Accumulator reseting");
         }
+        else
+        {
+            std_msgs::Float64 resultMsg;
+            resultMsg.data = algorithm_.getAverage();
+            publisher_.publish(resultMsg);
+            ROS_INFO("Publishing average");
+        }
+    }
+    catch(std::exception & e)
+    {
+        ROS_ERROR_STREAM(e.what());
     }
     
 }
-
-
-rcl_interfaces::msg::SetParametersResult RosPkgTemplate::dyn_reconf_callback(const std::vector<rclcpp::Parameter> & parameters)
-{
-    RCLCPP_INFO(this->get_logger(), "Parameter change request");
-    rcl_interfaces::msg::SetParametersResult result;
-    result.successful = false;
-    result.reason = "The reason it could not be allowed";
-    for (const auto & parameter : parameters) {
-        try {
-            if (parameter.get_name() == "param" && parameter.get_value<bool>() != this->param.get_value<bool>()) {
-                result.successful = true;
-                result.reason = "Parameter change accepted";
-                RCLCPP_INFO(this->get_logger(), "Parameter change accepted", parameter.get_name().c_str());
-                this->param = parameter;
-                RCLCPP_INFO(this->get_logger(), "Parameter '%s' changed", parameter.get_name().c_str());
-            }
-            }
-            catch(std::exception & e)
-            {
-                RCLCPP_WARN(this->get_logger(), e.what());
-                result.reason = e.what();
-                RCLCPP_INFO(this->get_logger(), "Parameter change canceled", parameter.get_name().c_str());
-            }
-        }
-    return result;
-}
-
-std_srvs::srv::SetBool::Response::ConstSharedPtr
-RosPkgTemplate::request_service(std_srvs::srv::SetBool::Response::ConstSharedPtr resp) {
-    auto request = std::make_shared<std_srvs::srv::SetBool::Request>();
-    request->data = true;
-    RCLCPP_INFO(this->get_logger(), "Sending request");
-    auto result = client_->async_send_request(request);
-    RCLCPP_INFO(this->get_logger(), "Image classification request has been response");
-    return resp;
-}
-
-#include "rclcpp_components/register_node_macro.hpp"
-
-RCLCPP_COMPONENTS_REGISTER_NODE(RosPkgTemplate)

@@ -1,71 +1,151 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 project(ros_pkg_template_cpp)
 
-# Default to C++14
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
-endif()
+## Use C++14
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
+## By adding -Wall and -Werror, the compiler does not ignore warnings anymore,
+## enforcing cleaner code.
+add_definitions(-Wall -Werror)
 
-find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(rclcpp_components REQUIRED)
-find_package(rclcpp_lifecycle REQUIRED)
-find_package(std_msgs REQUIRED)
-find_package(std_srvs REQUIRED)
+## Find catkin macros and libraries
+find_package(catkin REQUIRED
+  COMPONENTS
+    roscpp
+    std_msgs
+    std_srvs
+    roslint
+    dynamic_reconfigure
+)
+
+## Add dynamic reconfigure API
+generate_dynamic_reconfigure_options(
+cfg/DynConf.cfg
+#...
+)
+
+## Find system libraries
 find_package(Eigen3 REQUIRED)
 find_package(Boost REQUIRED)
 
+###################################
+## catkin specific configuration ##
+###################################
+## The catkin_package macro generates cmake config files for your package
+## Declare things to be passed to dependent projects
+## INCLUDE_DIRS: uncomment this if your package contains header files
+## LIBRARIES: libraries you create in this project that dependent projects also need
+## CATKIN_DEPENDS: catkin_packages dependent projects also need
+## DEPENDS: system dependencies of this project that dependent projects also need
+catkin_package(
+  INCLUDE_DIRS
+    include
+    ## This is only necessary because Eigen3 sets a non-standard EIGEN3_INCLUDE_DIR variable
+    ${EIGEN3_INCLUDE_DIR}
+  LIBRARIES
+    ${PROJECT_NAME}_core
+  CATKIN_DEPENDS
+    roscpp
+    std_msgs
+    std_srvs
+  DEPENDS
+  ## find_package(Eigen3) provides a non standard EIGEN3_INCLUDE_DIR instead of Eigen3_INCLUDE_DIRS.
+  ## Therefore, the DEPEND does not work as expected and we need to add the directory to the INCLUDE_DIRS
+  # Eigen3
+
+  ## Boost is not part of the DEPENDS since it is only used in source files,
+  ## Dependees do not depend on Boost when they depend on this package.
+)
+
+###########
+## Build ##
+###########
+
+## Specify additional locations of header files
+## Your package locations should be listed before other locations
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  # Set manually because Eigen sets a non standard INCLUDE DIR
   ${EIGEN3_INCLUDE_DIR}
+  # Set because Boost is an internal dependency, not transitive.
   ${Boost_INCLUDE_DIRS}
 )
 
-add_library(ros_pkg_template_composition SHARED
-        src/ros_pkg_template.cpp
-        src/algorithm.cpp
-        )
+## Declare a cpp library
+add_library(${PROJECT_NAME}_core
+   src/algorithm.cpp
+)
+target_compile_features(${PROJECT_NAME}_core INTERFACE cxx_std_11)
 
-target_compile_definitions(ros_pkg_template_composition
-  PRIVATE "ROS_PKG_TEMPLATE_DLL")
-ament_target_dependencies(ros_pkg_template_composition rclcpp rclcpp_components std_msgs std_srvs rclcpp_lifecycle)
+## Declare cpp executables
+add_executable(${PROJECT_NAME}
+  src/ros_pkg_template_node.cpp
+  src/ros_pkg_template.cpp
+)
+target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_11)
 
-# This package installs libraries without exporting them.
-# Export the library path to ensure that the installed libraries are available.
-if(NOT WIN32)
-  ament_environment_hooks(
-    "${ament_cmake_package_templates_ENVIRONMENT_HOOK_LIBRARY_PATH}")
+## Add dependencies to exported targets, like ROS msgs or srvs
+add_dependencies(${PROJECT_NAME}_core
+  ${catkin_EXPORTED_TARGETS}
+)
+
+add_dependencies(${PROJECT_NAME}
+  ${catkin_EXPORTED_TARGETS}
+  ${PROJECT_NAME}_gencfg
+)
+
+## Specify libraries to link executable targets against
+target_link_libraries(${PROJECT_NAME}_core
+  ${catkin_LIBRARIES}
+)
+
+target_link_libraries(${PROJECT_NAME}
+  ${PROJECT_NAME}_core
+  ${catkin_LIBRARIES}
+)
+
+#############
+## Install ##
+#############
+
+# Mark executables and/or libraries for installation
+install(
+  TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_core
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+# Mark cpp header files for installation
+install(
+  DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  FILES_MATCHING PATTERN "*.hpp"
+)
+
+# Mark other files for installation
+install(
+  DIRECTORY doc
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+#############
+## Testing ##
+#############
+
+if(${CATKIN_ENABLE_TESTING})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+## Add gtest based cpp test target and link libraries
+catkin_add_gtest(${PROJECT_NAME}-test
+  test/test_ros_pkg_template.cpp
+  test/algorithm_test.cpp)
+target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME}_core)
 endif()
 
-add_executable(ros_pkg_template_node src/ros_pkg_template_node.cpp)
-target_link_libraries(ros_pkg_template_node ros_pkg_template_composition)
-ament_target_dependencies(ros_pkg_template_node rclcpp class_loader)
+##########################
+## Static code analysis ##
+##########################
 
-install(TARGETS
-  ros_pkg_template_composition
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin)
-
-install(TARGETS
-  ros_pkg_template_node
-  DESTINATION lib/${PROJECT_NAME})
-
-install(DIRECTORY
-        launch
-        DESTINATION share/${PROJECT_NAME}/
-        )
-
-rclcpp_components_register_nodes(ros_pkg_template_composition "RosPkgTemplate")
-
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  ament_lint_auto_find_test_dependencies()
-endif()
-
-ament_package()
+roslint_cpp()
