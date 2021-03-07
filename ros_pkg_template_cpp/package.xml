@@ -3,7 +3,7 @@
 <package format="2">
   <name>ros_pkg_template_cpp</name>
   <version>0.0.1</version>
-  <description>Ros node template</description>
+  <description>Ros nodelet template</description>
   <maintainer email="jcarlos3094@gmail.com">Jose Carlos Garcia Moreno</maintainer>
   <license>Apache License 2.0</license>
   <author>Jose Carlos Garcia Moreno</author>
@@ -18,6 +18,11 @@
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
   <depend>dynamic_reconfigure</depend>
+  <depend>nodelet</depend>
 
   <build_depend>roslint</build_depend>
+  
+  <export>
+    <nodelet plugin="${prefix}/nodelets.xml"/>
+  </export>
 </package>

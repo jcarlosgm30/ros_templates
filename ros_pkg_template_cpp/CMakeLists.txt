@@ -17,6 +17,7 @@ find_package(catkin REQUIRED
     std_srvs
     roslint
     dynamic_reconfigure
+    nodelet
 )
 
 ## Add dynamic reconfigure API
@@ -73,16 +74,17 @@ include_directories(
   ${Boost_INCLUDE_DIRS}
 )
 
-## Declare a cpp library
+## Declare cpp libraries
 add_library(${PROJECT_NAME}_core
+   src/ros_pkg_template.cpp
    src/algorithm.cpp
 )
 target_compile_features(${PROJECT_NAME}_core INTERFACE cxx_std_11)
 
+
 ## Declare cpp executables
 add_executable(${PROJECT_NAME}
   src/ros_pkg_template_node.cpp
-  src/ros_pkg_template.cpp
 )
 target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_11)
 
@@ -90,6 +92,7 @@ target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_11)
 add_dependencies(${PROJECT_NAME}_core
   ${catkin_EXPORTED_TARGETS}
 )
+
 
 add_dependencies(${PROJECT_NAME}
   ${catkin_EXPORTED_TARGETS}
@@ -128,6 +131,12 @@ install(
 # Mark other files for installation
 install(
   DIRECTORY doc
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+# Install nodelets defined in xml file
+install(
+  FILES nodelets.xml
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 

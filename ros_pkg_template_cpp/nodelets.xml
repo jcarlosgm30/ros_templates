@@ -1,0 +1,7 @@
+<library path="lib/libros_pkg_template_cpp_core">
+    <class name="ros_pkg_template/ros_pkg_template"
+         type="ros_pkg_template::RosPkgTemplate"
+         base_class_type="nodelet::Nodelet">
+    <description>This is the ros package template nodelet.</description>
+    </class>
+</library>

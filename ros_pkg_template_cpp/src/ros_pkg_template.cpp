@@ -3,12 +3,24 @@
 // @author: Jose Carlos Garcia
 // @email: jcarlos3094@gmail.com
 //
-#include <chrono>
 #include "ros_pkg_template/ros_pkg_template.hpp"
 
-RosPkgTemplate::RosPkgTemplate(ros::NodeHandle& nodeHandle)
-: nodeHandle_(nodeHandle)
+namespace ros_pkg_template
 {
+RosPkgTemplate::RosPkgTemplate() : Nodelet()
+{
+}
+
+RosPkgTemplate::~RosPkgTemplate()
+{
+}
+
+void RosPkgTemplate::onInit()
+{
+    // Obtain Node Handles
+    nodeHandle_ = getNodeHandle();
+    privateNodeHandle_ = getPrivateNodeHandle();
+
     // Dynamic reconfigure parameters
     dynReconfServer_ =  boost::make_shared<dynamic_reconfigure::Server<ros_pkg_template_cpp::DynConfConfig>>(dynReconfServerMutex);
     dynamic_reconfigure::Server<ros_pkg_template_cpp::DynConfConfig>::CallbackType fDynReconfCb;
@@ -26,17 +38,14 @@ RosPkgTemplate::RosPkgTemplate(ros::NodeHandle& nodeHandle)
     subscriber_ = nodeHandle_.subscribe("input_float_topic",
                                         10,
                                         &RosPkgTemplate::callback, this);
-    publisher_ = nodeHandle_.advertise<std_msgs::Float64>("output_float_topic",
+    publisher_ = privateNodeHandle_.advertise<std_msgs::Float64>("output_float_topic",
                                                           10);
-    ROS_INFO("Successfully launched node.");
-}
+    NODELET_INFO("Successfully launched node.");
 
-RosPkgTemplate::~RosPkgTemplate()
-{
 }
 
 void RosPkgTemplate::dyn_reconf_callback(ros_pkg_template_cpp::DynConfConfig &config, uint32_t level) {
-  ROS_INFO("Reconfigure Request: %d %f %s %s %d", 
+  NODELET_INFO("Reconfigure Request: %d %f %s %s %d", 
             config.int_param, config.double_param, 
             config.str_param.c_str(), 
             config.bool_param?"True":"False", 
@@ -53,25 +62,27 @@ void RosPkgTemplate::dyn_reconf_callback(ros_pkg_template_cpp::DynConfConfig &co
 
 void RosPkgTemplate::callback(const std_msgs::Float64ConstPtr &msg)
 {
-    ROS_INFO("Receiving preprocessed float data");
+    NODELET_INFO("Receiving preprocessed float data");
     try {
         algorithm_.addData(msg->data);
         if (algorithm_.getDataSize() > 100)
         {
             algorithm_.accReset();
-            ROS_INFO("Accumulator reseting");
+            NODELET_INFO("Accumulator reseting");
         }
         else
         {
             std_msgs::Float64 resultMsg;
             resultMsg.data = algorithm_.getAverage();
             publisher_.publish(resultMsg);
-            ROS_INFO("Publishing average");
+            NODELET_INFO("Publishing average");
         }
     }
     catch(std::exception & e)
     {
-        ROS_ERROR_STREAM(e.what());
+        NODELET_ERROR_STREAM(e.what());
     }
     
 }
+
+} // namespace ros_pkg_template
